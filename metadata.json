@@ -1,0 +1,7 @@
+{
+  "name": "Cali: AI Food Logger",
+  "description": "An AI-powered web application that detects common Argentine dishes from a photo, estimates their nutritional information, and allows you to log and track your meals.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
