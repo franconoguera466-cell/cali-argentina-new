@@ -1,42 +1,205 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { DetectedFood } from '../types';
+import { DetectedFood } from "../types";
 
-// 👇 Acá es el único cambio importante
 const ai = new GoogleGenAI({
   apiKey: import.meta.env.VITE_API_KEY as string,
 });
 
-const model = 'gemini-2.5-flash';
+const model = "gemini-2.5-flash";
 
 const nutritionSchema = {
   type: Type.OBJECT,
   properties: {
-    calories: { type: Type.NUMBER, description: 'Estimated calories for the portion.' },
-    protein: { type: Type.NUMBER, description: 'Estimated grams of protein.' },
-    carbs: { type: Type.NUMBER, description: 'Estimated grams of carbohydrates.' },
-    fat: { type: Type.NUMBER, description: 'Estimated grams of fat.' },
+    calories: {
+      type: Type.NUMBER,
+      description: "Estimated calories for the portion.",
+    },
+    protein: {
+      type: Type.NUMBER,
+      description: "Estimated grams of protein.",
+    },
+    carbs: {
+      type: Type.NUMBER,
+      description: "Estimated grams of carbohydrates.",
+    },
+    fat: {
+      type: Type.NUMBER,
+      description: "Estimated grams of fat.",
+    },
   },
-  required: ['calories', 'protein', 'carbs', 'fat'],
+  required: ["calories", "protein", "carbs", "fat"],
 };
 
 const foodDetectionSchema = {
   type: Type.OBJECT,
   properties: {
-    error: { type: Type.STRING, description: 'An error message if the food is not recognized.' },
-    name: { type: Type.STRING, description: 'The name of the detected Argentine dish.' },
-    portionSize: { type: Type.STRING, description: 'A typical serving size, e.g., "1 unit" or "100g".' },
+    error: {
+      type: Type.STRING,
+      description:
+        "An error message if the food is not recognized or the image has no food.",
+    },
+    name: {
+      type: Type.STRING,
+      description: "The name of the detected dish or food.",
+    },
+    portionSize: {
+      type: Type.STRING,
+      description:
+        'A typical serving size, e.g., "1 unit", "1 plate", "1 slice", "1 bowl", "100g".',
+    },
     nutrition: nutritionSchema,
   },
 };
 
-export const estimateNutritionFromImage = async (base64Image: string): Promise<DetectedFood> => {
-  const prompt = `You are a nutritional expert specializing in Argentine cuisine. Analyze the attached image. Your task is to identify if the primary food item is one of the following common Argentine dishes: Empanada, Milanesa, Asado, Pizza, Medialuna, Choripán, Locro.
+export const estimateNutritionFromImage = async (
+  base64Image: string
+): Promise<DetectedFood> => {
+  const prompt = `
+You are a nutritional expert specialized in Argentine food and everyday international dishes.
+Analyze the attached image and identify the SINGLE primary food or dish.
 
-If it is one of these dishes, provide your best estimation for its nutritional values for a standard single serving.
+Your goals:
+- Always choose the closest reasonable dish/food, even if it is not a perfect match.
+- Only use "error" if the image clearly does not contain food or is impossible to interpret.
 
-If the food is not one of these, or if you cannot identify it clearly, your response should indicate an error.
+### A. Argentine main dishes (prefer these when they match)
+- Empanada de carne
+- Empanada de pollo
+- Empanada de jamón y queso
+- Milanesa de carne
+- Milanesa de pollo
+- Milanesa napolitana
+- Asado (carne vacuna a la parrilla)
+- Chorizo a la parrilla / Choripán
+- Provoleta
+- Pollo al horno con papas
+- Pastel de papa
+- Locro
+- Humita en chala
+- Pizza muzzarella
+- Pizza napolitana
+- Pizza de fugazzeta
+- Pizzanesa
+- Fideos con salsa de tomate (fideos con tuco)
+- Fideos con manteca y queso rallado
+- Ñoquis de papa con salsa
+- Arroz con pollo
+- Polenta con salsa de tomate y queso
+- Hamburguesa casera con pan
+- Sandwich de milanesa
+- Ensalada mixta (lechuga, tomate, cebolla)
+- Ensalada rusa (papa, zanahoria, arvejas, mayonesa)
+- Tarta de verdura o jamón y queso
+- Tortilla de papa (tortilla española)
+- Pancho (hot dog argentino)
 
-Strictly adhere to the JSON schema provided.`;
+### B. Common international / generic dishes
+- Pasta con salsa de tomate (spaghetti, penne, etc.)
+- Pasta con salsa blanca / crema
+- Lasagna
+- Pizza de pepperoni
+- Cheeseburger (hamburguesa con queso)
+- Hot dog
+- Sushi (rolls variados)
+- Tacos de carne
+- Tacos de pollo
+- Burrito
+- Wrap de pollo
+- Curry de pollo con arroz
+- Bowl de arroz con vegetales
+- Pollo grillado con guarnición
+- Filete de salmón grillado
+- Fish and chips (pescado frito con papas)
+- Stir-fry de vegetales con arroz
+- Sandwich de jamón y queso
+- Omelette con queso y vegetales
+- Sopa (sopa de verduras, sopa de pollo, sopa cremosa)
+
+### C. Fruits (as main item)
+- Banana
+- Manzana
+- Naranja
+- Mandarina
+- Pera
+- Uvas
+- Sandía
+- Melón
+- Frutilla / fresa
+- Arándanos
+- Kiwi
+- Ananá / piña
+- Durazno
+- Ciruela
+
+### D. Vegetables / sides
+- Papa hervida
+- Papa al horno
+- Papa frita (french fries)
+- Batata / camote
+- Zanahoria
+- Tomate
+- Lechuga
+- Cebolla
+- Morrón / pimiento
+- Zucchini / zapallito
+- Brócoli
+- Espinaca
+- Repollo
+- Mix de vegetales salteados
+- Ensalada variada en bowl
+
+### E. Desserts and sweets
+- Helado en pote (1 o 2 bochas)
+- Flan con dulce de leche
+- Panqueque con dulce de leche
+- Brownie
+- Torta de chocolate
+- Tiramisu
+- Alfajor de dulce de leche
+- Factura (medialuna, vigilante, etc.)
+- Galletitas dulces
+
+### F. Drinks (if they are clearly the main item)
+- Vaso de agua
+- Gaseosa (cola)
+- Jugo de fruta
+- Café
+- Mate
+- Cerveza
+
+### Behavior rules
+
+1. ALWAYS try to classify the food as one of the items above or the closest similar dish.
+   - Example: any spaghetti-like pasta with red sauce -> "Pasta con salsa de tomate".
+   - Example: any grilled steak with side -> "Asado" or "meat dish" depending on the image.
+2. If there are multiple items on the plate, choose the one that visually occupies the most space.
+3. For portionSize, use natural labels like:
+   - "1 unit", "2 units"
+   - "1 plate", "1 slice", "1 bowl"
+   - "100g approx."
+4. Nutrition values must be your best realistic estimate for that portion:
+   - calories (kcal)
+   - protein (grams)
+   - carbs (grams)
+   - fat (grams)
+5. ONLY use error if:
+   - The image clearly has no food (for example, a car, a person, a wall), or
+   - It is so blurred or dark that you cannot even guess the type of food.
+
+You MUST return a JSON object that matches this structure:
+
+{
+  "error": string | null,
+  "name": string,
+  "portionSize": string,
+  "nutrition": {
+    "calories": number,
+    "protein": number,
+    "carbs": number,
+    "fat": number
+  }
+}
+`;
 
   try {
     const response = await ai.models.generateContent({
@@ -45,7 +208,7 @@ Strictly adhere to the JSON schema provided.`;
         parts: [
           {
             inlineData: {
-              mimeType: 'image/jpeg',
+              mimeType: "image/jpeg",
               data: base64Image,
             },
           },
@@ -64,15 +227,19 @@ Strictly adhere to the JSON schema provided.`;
     if (result.error) {
       throw new Error(result.error);
     }
-    
+
     if (!result.name || !result.nutrition) {
-      throw new Error("Could not identify the food. Please try another photo.");
+      throw new Error(
+        "Could not identify the food. Please try another photo."
+      );
     }
 
     return result as DetectedFood;
   } catch (error) {
     console.error("Gemini API error:", error);
-    throw new Error("Failed to analyze image. The food might not be recognized or there was a network issue.");
+    throw new Error(
+      "Failed to analyze image. The food might not be recognized or there was a network issue."
+    );
   }
 };
 
@@ -91,4 +258,3 @@ export const getDailyTip = async (): Promise<string> => {
     return "Stay hydrated by drinking plenty of water throughout the day!";
   }
 };
-
